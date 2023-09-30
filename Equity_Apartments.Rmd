@@ -1,0 +1,850 @@
+---
+title: "Equity Residential Apartment"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+# Introduction
+This project aims to analyse the different variables that affect the rental vacancy ratio. What Is a Vacancy Rate? The vacancy rate is the percentage of all available units in a rental property, such as a hotel or apartment complex, that are vacant or unoccupied at a particular time.
+
+A vacancy rate is the opposite of the occupancy rate, which is the percentage of units in a rental property that are occupied. High vacancy rates indicate that a property is not renting well while low vacancy rates can point to strong rental sales.
+
+Low vacancy rates mean there are more occupied units, while high vacancy rates indicate people do not want to live in a certain building or area. The formula of vacancy rate is the following :
+$$\text{Vacancy rate}=\frac{\text{Available units}}{\text{Total units}}$$
+```{r}
+defaultW <- getOption("warn")
+options(warn = -1)
+```
+Exploratory data analysis
+```{r}
+#Importing libraries 
+library(naniar) # nan value
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(psych)
+library(testthat)
+library(corrplot)
+library(GGally) # for scatterplot matrix
+library(infer) # statistical inference
+library(forcats) # handle categorical variables
+library(ltm) # correlation between numerical and categorical variables
+library(caret) # encoding
+library(MASS) # estimating linear models through generalized least squares for pca
+library(factoextra) #  ggplot2-based elegant data visualization for pca
+library(ggsignif) # vis
+library(rstatix) # vis
+library(ggfortify)
+```
+Reading the data
+```{r}
+df = read_csv("C:/Users/allo/Desktop/ABC/Projects/Rental Vacancy/Equity_Apartments_Data.csv")
+head(df)
+```
+Columns of the data:
+```{r}
+colnames(df)
+```
+Removing irrelevant columns: …1,URL,building_id,Unique_ID,unit_id,Address
+```{r}
+#remove ids, url and adress columns
+data = subset(df, select = -c(...1,URL,building_id,Unique_ID,unit_id,Address))
+head(data)
+```
+
+Summary of data:
+```{r}
+summary(data)
+```
+```{r}
+# duplicated values
+sum(duplicated(data))
+```
+```{r}
+data = data[!duplicated(data), ]
+```
+Nan values treatment
+```{r}
+# nan values
+colSums(is.na(data))/length(data$Price)
+```
+    
+```{r}
+# nan values
+miss_var_summary(data)
+```
+
+
+visualize missing values
+```{r}
+# visualize missing values
+vis_miss(data,warn_large_data=FALSE)
+```
+
+```{r}
+# remove nan value
+data_clean = na.omit(data)
+any(is.na(data_clean))
+```
+
+```{r}
+ds = data_clean
+nrow(ds)/nrow(data)
+```
+Variable analysis:
+Independent variable:
+Analysing Estiamted_Vacancy variable:
+```{r}
+ggplot(ds,aes(Estiamted_Vacancy)) + geom_density() 
+```
+```{r}
+ggplot(ds,aes(Estiamted_Vacancy)) + geom_boxplot()
+```
+
+Normality analysis of Estiamted_Vacancy
+```{r}
+qqnorm(ds$Estiamted_Vacancy, pch = 1, frame = FALSE)
+qqline(ds$Estiamted_Vacancy, col = "steelblue", lwd = 2)
+```
+
+Normality transformation using log function
+```{r}
+ds$log_Vacancy <- log(ds$Estiamted_Vacancy)
+ggplot(ds,aes(log_Vacancy)) + geom_density() 
+```
+```{r}
+qqnorm(ds$log_Vacancy, pch = 1, frame = FALSE)
+qqline(ds$log_Vacancy, col = "steelblue", lwd = 2)
+```
+
+Dependent variable and their relationships with target variable:
+Analyse City variable:
+```{r}
+ds %>%
+  mutate(city = fct_infreq(City)) %>%
+  ggplot(aes(x = city)) + 
+  geom_bar() + 
+  coord_flip()
+```
+
+The most common cities are Washington DC, San Francisco, New York City, Boston and Los Angeles Estiamted_Vacancy vs City
+```{r}
+ggplot(ds,aes(Estiamted_Vacancy)) + geom_density() + facet_wrap(~City) 
+```
+
+```{r}
+ggplot(ds,aes(Estiamted_Vacancy,fill=City)) + geom_density() 
+```
+
+The distribution of Estiamted_Vacancy changes if we change the city which means that the city affects the target variable Comapring average vacancy in every city
+
+# Comapring average vacancy in every city
+```{r}
+average_vacancy <- ds %>% group_by(City) %>% summarize(mean = mean(Estiamted_Vacancy))
+ggplot(average_vacancy,aes(x=fct_reorder(City, mean),y=mean)) + geom_bar(stat = "identity") + coord_flip()
+```
+
+New Washingtom DC, Boston and San Fransisco are The three cities with the highest Vacancy. 
+# Analyse price variable:
+```{r}
+ggplot(ds,aes(Price)) + geom_density() 
+```
+```{r}
+ggplot(ds,aes(Price)) + geom_boxplot()
+```
+
+we remove rows with null price
+```{r}
+ds <- ds %>% filter(Price != 0)
+```
+Normality analysis of Price
+```{r}
+qqnorm(ds$Price, pch = 1, frame = FALSE)
+qqline(ds$Price, col = "steelblue", lwd = 2)
+```
+
+Normality transformation using log function
+```{r}
+ds$log_price <- log(ds$Price)
+ggplot(ds,aes(log_price)) + geom_density()
+```
+```{r}
+qqnorm(ds$log_price, pch = 1, frame = FALSE)
+qqline(ds$log_price, col = "steelblue", lwd = 2)
+```
+
+Price in different cities
+```{r}
+ggplot(ds,aes(Price)) + geom_density() + facet_wrap(~City) 
+```
+```{r}
+ggplot(ds,aes(Price,fill=City)) + geom_density() 
+```
+
+Comapring average price in every city
+```{r}
+average_price = ds %>% group_by(City) %>% summarize(mean = mean(Price))
+ggplot(average_price,aes(x=fct_reorder(City, mean),y=mean)) + geom_bar(stat = "identity") + coord_flip()
+```
+
+The most thre expensice cities are New York City, Boston and San Fransisco Estiamted_Vacancy vs Price relation between the price and the vacancy
+
+# relation between the price and the vacancy
+```{r}
+ggplot(ds,aes(x=Estiamted_Vacancy,y=Price)) + geom_point() + geom_smooth(method="lm")
+```
+
+log_Vacancy vs log_price
+
+# relation between the log price and the log vacancy
+```{r}
+ggplot(ds,aes(x=log_Vacancy,y=log_price)) + geom_point() + geom_smooth(method="lm")
+```
+```{r}
+
+ds %>% 
+  summarize(correlation = cor(x=Estiamted_Vacancy, y=Price))
+```
+Low positive correlation between Price and Estimated_vacancy : 0.15
+```{r}
+lm(Estiamted_Vacancy ~ Price, data = ds)
+```
+
+Estiamted_Vacancy_hat=3.562×10−2+1.549×10−5∗Price
+# Analysing sq.ft variable:
+
+# distribution of sq.ft
+```{r}
+ggplot(ds,aes(sq.ft)) + geom_density() 
+```
+
+```{r}
+ggplot(ds,aes(sq.ft)) + geom_boxplot()
+```
+
+Normality analysis of sq.ft
+```{r}
+qqnorm(ds$sq.ft, pch = 1, frame = FALSE)
+qqline(ds$sq.ft, col = "steelblue", lwd = 2)
+```
+
+# distribution of sq.ft
+```{r}
+ggplot(ds,aes(sq.ft)) + geom_density() + facet_wrap(~City) 
+```
+```{r}
+
+ggplot(ds,aes(sq.ft,fill=City)) + geom_density()
+
+```
+Estiamted_Vacancy vs sq.ft
+```{r}
+# relation between the price and the vacancy
+ggplot(ds,aes(x=Estiamted_Vacancy,y=sq.ft)) + geom_point() + geom_smooth(method="lm")
+```
+
+
+Log Vacancy vs sq.ft
+
+```{r}
+# relation between the price and the vacancy
+ggplot(ds,aes(x=log_Vacancy,y=sq.ft)) + geom_point() + geom_smooth(method="lm")
+```
+
+Analyse Days_Till_Available:
+Days_Till_Available = Move_in_date - Day_Recorded
+Move_in_date : Date the apartment was available for move in Day_Recorded : Day the row of data was scraped.
+```{r}
+# remove Move_in_date and Day_Recorded
+ds <-subset(ds, select = -c(Move_in_date,Day_Recorded))
+```
+
+```{r}
+# Date the apartment was available for move in.
+ggplot(ds,aes(Days_Till_Available)) + geom_density()
+```
+Model Days_Till_Available with an exponential distribution
+$$f(x) = e^{-} \
+
+= , $$
+```{r}
+lambda <- 1/mean(ds$Days_Till_Available)
+x <- rexp(length(ds$Days_Till_Available), rate=lambda)
+ggplot(data=ds)+ geom_density(aes(x=Days_Till_Available,colour='Days_Till_Available')) + geom_density(aes(x=x,colour='Exponential Distribution')) +xlim(range = c(0,max(ds$Days_Till_Available)))+ ggtitle("Exponential Density vs Days_Till_Available density")
+```
+
+relation between the Days_Till_Available and the vacancy
+```{r}
+# relation between the Days_Till_Available and the vacancy
+ggplot(ds,aes(x=Estiamted_Vacancy,y=Days_Till_Available)) + geom_point() + geom_smooth(method="lm")
+```
+
+relation between the Days_Till_Available and the log vacancy
+```{r}
+# relation between the Days_Till_Available and the log vacancy
+ggplot(ds,aes(x=log_Vacancy,y=Days_Till_Available)) + geom_point() + geom_smooth(method="lm")
+```
+
+Analysing Units
+```{r}
+ggplot(ds,aes(Units)) + geom_density()
+```
+
+Normality analysis
+```{r}
+qqnorm(ds$Units, pch = 1, frame = FALSE)
+qqline(ds$Units, col = "steelblue", lwd = 2)
+```
+
+relation between the Days_Till_Available and the log vacancy
+```{r}
+ggplot(ds,aes(x=log_Vacancy,y=Units)) + geom_point() + geom_smooth(method="lm")
+```
+
+Analysing Day_of_the_week_recorded
+```{r}
+ggplot(data,aes(Day_of_the_week_recorded)) + geom_bar(stat = "count")
+```
+
+```{r}
+ggplot(data,aes(Estiamted_Vacancy,fill=Day_of_the_week_recorded)) + geom_density()
+```
+
+Since Day_of_the_week_recorded represents the day day of the week the data was scraped, then it’s irrelevant. So we’ll remove it.
+```{r}
+ds <- subset(ds, select = -c(Day_of_the_week_recorded))
+```
+
+Analysing Beds
+```{r}
+ggplot(ds,aes(Beds)) + geom_bar(stat = "count")
+```
+
+```{r}
+ggplot(ds,aes(Estiamted_Vacancy,fill=as.factor(Beds))) + geom_density()
+```
+
+The distribution of Estiamted_Vacancy doesn’t change with the change of number beds, which means it doesn’t affect the target variable. To confirm this hypothesis, let’s apply chi square test:
+H0:Estiamted_Vacancy and beds are independents H1:Estiamted_Vacancy and beds are dependents 
+
+# Perform chi-squared test
+```{r}
+chisq.test(ds$Beds,ds$Estiamted_Vacancy,simulate.p.value = TRUE)
+```
+
+0.0004998 < 0.05 then we reject the H0, Estiamted_Vacancy and beds are dependents. # Analysing Baths
+```{r}
+ggplot(ds,aes(x=Baths)) + geom_bar()
+```
+
+We replice 1.5 and 2.5 by integer values
+```{r}
+ds$Baths <- as.integer(ds$Baths)
+ggplot(ds,aes(Estiamted_Vacancy,fill=as.factor(ds$Baths))) + geom_density()
+```
+
+Apartments with 3 baths are negligible so let’s replace it with 2
+```{r}
+ds$Baths[ds$Baths == 3] <- 2
+ggplot(ds,aes(Estiamted_Vacancy,fill=as.factor(Baths))) + geom_density()
+```
+
+The distribution of Estiamted_Vacancy doesn’t change with the change of number of Baths, which means it doesn’t affect the target variable.To confirm this hypothesis, let’s apply chi square test:
+H0:Estiamted_Vacancy and Baths are independents H1:Estiamted_Vacancy and Baths are dependents 
+```{r}
+# Perform chi-squared test
+chisq.test(ds$Baths,ds$Estiamted_Vacancy,simulate.p.value = TRUE)
+
+```
+0.0004998 < 0.05 then we reject the H0, Estiamted_Vacancy and baths are dependents. # Analysing Floor variable:
+```{r}
+ggplot(ds,aes(Floor)) + geom_density()
+```
+```{r}
+lambda <- 1/mean(ds$Floor)
+x <- rexp(length(ds$Floor), rate=lambda)
+ggplot(data=ds)+ geom_density(aes(x=Floor,colour='Floor')) + geom_density(aes(x=x,colour='Exponential Distribution')) +xlim(range = c(0,max(ds$Floor)))+ ggtitle("Exponential Density vs Floor density")
+```
+
+relation between the Days_Till_Available and the log vacancy
+```{r}
+# relation between the Days_Till_Available and the log vacancy
+ggplot(ds,aes(x=log_Vacancy,y=Floor)) + geom_point() + geom_smooth(method="lm")
+```
+
+Analysing Office_Space variable:
+```{r}
+ggplot(ds,aes(Office_Space)) + geom_bar(stat = "count") 
+```
+
+The majority of apartment doesn’t have an office space.
+```{r}
+ggplot(ds,aes(Estiamted_Vacancy,fill=as.factor(Office_Space))) + geom_density()
+```
+
+The distribution of Estiamted_Vacancy doesn’t change with the change Office_Space, which means it doesn’t affect the target variable.To confirm this hypothesis, let’s apply chi square test:
+H0:Estiamted_Vacancy and Office_Space are independents H1:Estiamted_Vacancy and Office_Space are dependents 
+```{r}
+# Perform chi-squared test
+chisq.test(ds$Office_Space,ds$Estiamted_Vacancy,simulate.p.value = TRUE)
+```
+    
+0.0004998 < 0.05 then we reject the H0, Estiamted_Vacancy and Office_Space are dependents. 
+# Analysing Renovated variable:
+```{r}
+ggplot(ds,aes(Renovated)) + geom_bar(stat = "count") 
+```
+
+```{r}
+ggplot(ds,aes(Estiamted_Vacancy,fill=as.factor(Renovated))) + geom_density()
+```
+
+The distribution of Estiamted_Vacancy doesn’t change with the change Renovated, which means it doesn’t affect the target variable. To confirm this hypothesis, let’s apply chi square test:
+H0:Estiamted_Vacancy and Renovated are independents H1:Estiamted_Vacancy and Renovated are dependents 
+```{r}
+# Perform chi-squared test
+chisq.test(ds$Renovated,ds$Estiamted_Vacancy,simulate.p.value = TRUE)
+```
+    
+0.0004998 < 0.05 then we reject the H0, Estiamted_Vacancy and Renovated are dependents. # Analysing Stainless_Appliances
+```{r}
+ggplot(ds,aes(Stainless_Appliances)) + geom_bar(stat = "count") 
+```
+
+```{r}
+ggplot(ds,aes(Estiamted_Vacancy,fill=as.factor(Stainless_Appliances))) + geom_density()
+```
+
+The distribution of Estiamted_Vacancy doesn’t change with the change Stainless_Appliances, which means it doesn’t affect the target variable. To confirm this hypothesis, let’s apply chi square test:
+H0:Estiamted_Vacancy and Stainless_Appliances are independents H1:Estiamted_Vacancy and Stainless_Appliances are dependents 
+```{r}
+# Perform chi-squared test
+chisq.test(ds$Stainless_Appliances,ds$Estiamted_Vacancy,simulate.p.value = TRUE)
+```
+
+0.0004998 < 0.05 then we reject the H0, Estiamted_Vacancy and Stainless_Appliances are dependents. 
+# Analysing Fireplace
+```{r}
+ggplot(ds,aes(Fireplace)) + geom_bar(stat = "count") 
+```
+
+```{r}
+ggplot(ds,aes(Estiamted_Vacancy,fill=as.factor(Fireplace))) + geom_density()
+```
+
+The distribution of Estiamted_Vacancy doesn’t change with the change Fireplace, which means it doesn’t affect the target variable. To confirm this hypothesis, let’s apply chi square test:
+H0:Estiamted_Vacancy and Fireplace are independents H1:Estiamted_Vacancy and Fireplace are dependents 
+```{r}
+# Perform chi-squared test
+chisq.test(ds$Fireplace,ds$Estiamted_Vacancy,simulate.p.value = TRUE)
+```
+
+
+0.0004998 < 0.05 then we reject the H0, Estiamted_Vacancy and Fireplace are dependents.
+# Analysing Balcony
+```{r}
+ggplot(ds,aes(Balcony)) + geom_bar(stat = "count") 
+```
+
+```{r}
+ggplot(ds,aes(Estiamted_Vacancy,fill=as.factor(Balcony))) + geom_density()
+```
+
+The distribution of Estiamted_Vacancy doesn’t change with the change Balcony, which means it doesn’t affect the target variable. To confirm this hypothesis, let’s apply chi square test:
+H0:Estiamted_Vacancy and Balcony are independents H1:Estiamted_Vacancy and Balcony are dependents 
+```{r}
+# Perform chi-squared test
+chisq.test(ds$Balcony,ds$Estiamted_Vacancy,simulate.p.value = TRUE)
+```
+
+0.0004998 < 0.05 then we reject the H0, Estiamted_Vacancy and Balcony are dependents. 
+# Analysing City_Skyline
+```{r}
+ggplot(ds,aes(City_Skyline)) + geom_bar(stat = "count") 
+```
+
+```{r}
+ggplot(ds,aes(Estiamted_Vacancy,fill=as.factor(City_Skyline))) + geom_density()
+```
+
+The distribution of Estiamted_Vacancy doesn’t change with the change City_Skyline, which means it doesn’t affect the target variable. To confirm this hypothesis, let’s apply chi square test:
+H0:Estiamted_Vacancy and City_Skyline are independents H1:Estiamted_Vacancy and City_Skyline are dependents 
+```{r}
+# Perform chi-squared test
+chisq.test(ds$City_Skyline,ds$Estiamted_Vacancy,simulate.p.value = TRUE)
+```
+
+0.0004998 < 0.05 then we reject the H0, Estiamted_Vacancy and City_Skyline are dependents. 
+
+# Analysing Walk_In_Closet
+```{r}
+ggplot(ds,aes(Walk_In_Closet)) + geom_bar(stat = "count") 
+```
+
+```{r}
+ggplot(ds,aes(Estiamted_Vacancy,fill=as.factor(Walk_In_Closet))) + geom_density()
+```
+
+The distribution of Estiamted_Vacancy doesn’t change with the change Walk_In_Closet, which means it doesn’t affect the target variable. To confirm this hypothesis, let’s apply chi square test:
+H0:Estiamted_Vacancy and Walk_In_Closet are independents H1:Estiamted_Vacancy and Walk_In_Closet are dependents 
+```{r}
+# Perform chi-squared test
+chisq.test(ds$Walk_In_Closet,ds$Estiamted_Vacancy,simulate.p.value = TRUE)
+```
+   
+0.0004998 < 0.05 then we reject the H0, Estiamted_Vacancy and Walk_In_Closet are dependents. 
+# Analysing Kitchen_Island
+```{r}
+ggplot(ds,aes(Kitchen_Island)) + geom_bar(stat = "count") 
+```
+
+```{r}
+ggplot(ds,aes(Estiamted_Vacancy,fill=as.factor(Kitchen_Island))) + geom_density()
+```
+
+The distribution of Estiamted_Vacancy doesn’t change with the change Kitchen_Island, which means it doesn’t affect the target variable. To confirm this hypothesis, let’s apply chi square test:
+H0:Estiamted_Vacancy and Kitchen_Island are independents H1:Estiamted_Vacancy and Kitchen_Island are dependents 
+```{r}
+# Perform chi-squared test
+chisq.test(ds$Kitchen_Island,ds$Estiamted_Vacancy,simulate.p.value = TRUE)
+```
+ 
+ 
+0.0004998 < 0.05 then we reject the H0, Estiamted_Vacancy and Kitchen_Island are dependents. 
+# Analysing Exposure variable:
+```{r}
+mean(ds$Northern_Exposure)
+```
+```{r}
+mean(ds$Southern_Exposure)
+```
+```{r}
+mean(ds$Eastern_Exposure)
+```
+```{r}
+mean(ds$Western_Exposure)
+```
+
+Anova test ANalysis Of VAriance
+$$H0:μ_{northern}=μ_{southern}=μ_{eastern}=μ_{western}\\
+H1: \text{At least one of the means is different}$$
+```{r}
+exposure <- ds %>% group_by(Western_Exposure,Eastern_Exposure,Southern_Exposure,Northern_Exposure) %>% 
+  mutate(Exposure = case_when(Western_Exposure == 1 ~ 'Western',
+  Eastern_Exposure == 1 ~ "Eastern",
+  Southern_Exposure == 1 ~ 'Southern',
+  Northern_Exposure == 1 ~ "Northern"))
+exposure <- exposure %>% drop_na(Exposure)
+ggplot(exposure) + geom_boxplot(aes(x=Exposure,y=Estiamted_Vacancy))
+```
+
+```{r}
+ggplot(exposure,aes(Estiamted_Vacancy,fill=Exposure)) + geom_density()
+```
+
+The distribution of Estiamted_Vacancy doesn’t change with the change Exposure, which means it doesn’t affect the target variable. To confirm this hypothesis, let’s apply ANOVA test: Verifying anova conditions : The data must be normally distributed or n > 30 The variances of each group should be approximately equal
+```{r}
+exposure %>%
+  group_by(Exposure) %>%
+  summarize(n = n())
+```
+
+Indeed all the categories are greater of 30 in term of population
+```{r}
+exposure %>%
+  group_by(Exposure) %>%
+  summarize(sd = sd(Estiamted_Vacancy)) 
+```
+```{r}
+0.07368507/0.04474841
+```
+
+Apparently we have: sdmax/sdmin=1.646652<2
+```{r}
+se = sqrt(p_0*(1-p_0)/nrow(ds))
+se
+```
+
+All the conditions are met so we can use anova test.
+```{r}
+a1 <- aov(Estiamted_Vacancy~Exposure,data=exposure)
+summary(a1)
+```
+
+We have 3 degrees of freedom for the groups, and 39418 for the error, then the total degree of freedom is 39421 Test statistics is 137.5 and the p value <2e-16 < 0.05 So we reject the null hypothesis then at least one of the means is different
+
+TukeyHSD : honestly significant difference
+```{r}
+TH <- TukeyHSD(x = a1, ordered = FALSE, conf.level = 0.95)
+TH
+```
+ 
+```{r}
+plot(TH)
+```
+
+We have a significant difference between Western Exposure and Eastern Exposure, and between Southern Exposure and Northern Exposure.
+
+Statistical inference
+Bootstrap sample of Estiamted_Vacancy
+
+```{r}
+set.seed(100)
+bootstrap_sample <- ds %>%
+  specify(response = Estiamted_Vacancy) %>%
+  generate(reps = 1,type = "bootstrap")
+head(bootstrap_sample)
+```
+
+Bootstrap sample histogram of Estiamted_Vacancy
+```{r}
+ggplot(bootstrap_sample,aes(x = Estiamted_Vacancy)) + geom_histogram(binwidth = 0.03)
+```
+
+Histogram of Estiamted_Vacancy
+```{r}
+ggplot(ds,aes(x = Estiamted_Vacancy)) + geom_histogram(binwidth = 0.03)
+```
+
+Estimation of the mean using bootstrap method
+```{r}
+boot <- ds %>%
+  specify(response = Estiamted_Vacancy) %>%
+  generate(reps = 1000,type = "bootstrap") %>%
+  calculate(stat="mean")
+```
+
+Mean sample
+```{r}
+head(boot)
+```
+
+Histogram of the mean
+```{r}
+ggplot(boot) + geom_histogram(aes(x = stat), binwidth = 0.0001)
+```
+
+The estimated mean
+```{r}
+boot %>% summarize(mean(stat))
+mean(stat)
+```
+```{r}
+#bootstrap interval 95%
+get_ci(boot, level = 0.95)
+```
+We are 95% confident that the true mean of Estiamted_Vacancy is between 0.08162138 and 0.08330824 
+#### Encoding
+
+# Hot encoding for City
+```{r}
+new_ds <- ds %>% dplyr::select(-c(Price,Estiamted_Vacancy,,'Apartment Name',Amenity)) 
+num_ds <- select_if(new_ds, is.numeric)
+dummy_encoded_vars <- dummyVars(~ City, data = new_ds)
+new_df <- data.frame(predict(dummy_encoded_vars, newdata = new_ds))
+new_ds <- bind_cols(new_ds %>% dplyr::select(-c(City)), new_df)
+colnames(new_ds)
+```
+
+ 
+Scaling variables
+```{r}
+head(num_ds)
+```
+```{r}
+ds_scaled <- scale(num_ds)
+scaled_ds <- bind_cols(ds_scaled,new_ds %>% dplyr::select(-c(colnames(num_ds))))
+```
+check if all columns are numeric
+```{r}
+sapply(scaled_ds, is.factor)
+```
+                 
+# convert any non-numeric columns to numeric
+```{r}
+scaled_ds <- scaled_ds %>% dplyr::mutate_if(is.factor, as.numeric)
+```
+Clustering
+PCA : Principal Components Analysis
+```{r}
+pca_model <- prcomp(~.,data=scaled_ds)
+result <- summary(pca_model)
+result
+```
+
+Eigen values:
+```{r}
+get_eig(pca_model)
+```
+ 
+
+Percentage of explained variances:
+```{r}
+fviz_screeplot(pca_model,type="lines",addlabels=TRUE)
+```
+
+```{r}
+autoplot(pca_model,data=scaled_ds)
+```
+
+We may coonclude that there exit two clusters. The sq.ft variable has bimodal distribution.
+```{r}
+ggplot(scaled_ds,aes(sq.ft)) + geom_density()
+```
+
+We create a new feature called sq which take 0 if sq.ft is negative and 1 if it’s positive.
+```{r}
+test_df <- scaled_ds
+test_df$sq <- as.integer(test_df$sq.ft < 0)
+autoplot(pca_model,data=test_df,colour='sq')
+```
+
+```{r}
+ggplot(test_df,aes(x = log_price,fill = as.factor(sq))) + geom_density()
+```
+
+We remark that price changes in function of sq. 
+#### Modeling
+```{r}
+set.seed(1)
+```
+We use 70% of dataset as training set and 30% as test set
+```{r}
+sample <- sample(c(TRUE, FALSE), nrow(scaled_ds), replace=TRUE, prob=c(0.7,0.3))
+train  <- scaled_ds[sample, ]
+test   <- scaled_ds[!sample, ]
+```
+Linear Regression
+```{r}
+linear_model <- lm(log_Vacancy~., train)
+summary(linear_model)
+```
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(linear_model)
+```
+
+Predictions:
+```{r}
+pred1 <- predict(linear_model, newdata = test)
+```
+```{r}
+rmse <- sqrt(sum(exp(pred1) - exp(test$log_Vacancy))^2)/length(test$log_Vacancy)
+c(RMSE = rmse, R2=summary(linear_model)$r.squared)
+```
+
+Predictions analysis
+```{r}
+par(mfrow=c(1,1))
+plot(test$log_Vacancy, pred1)
+```
+
+```{r}
+library(jtools)
+plot_summs(linear_model, robust = TRUE)
+```
+
+
+
+Random Forest
+```{r}
+library(randomForest)
+rf <- randomForest(log_Vacancy ~ ., data = train,mtry = 3,
+                        importance = TRUE, na.action = na.omit)
+print(rf)
+```
+```{r}
+plot(rf)
+```
+
+Predictions:
+```{r}
+pred2 <- predict(rf, newdata = test)
+rmse <- sqrt(sum(exp(pred2) - exp(test$log_Vacancy))^2)/length(test$log_Vacancy)
+c(RMSE = rmse,R2 = 1 - (sum((exp(test$log_Vacancy)-exp(pred2))^2)/sum((exp(test$log_Vacancy)-mean(exp(test$log_Vacancy)))^2)))
+```
+We have a higher R2 compared to linear regression and we reduced the RMSE. ## Predictions analysis
+```{r}
+par(mfrow=c(1,1))
+plot(test$log_Vacancy, pred2)
+```
+
+Residual analysis
+```{r}
+res <- pred2 - test$log_Vacancy
+plot(pred2,res)
+abline(0,0)
+```
+
+The model make approximately the same errors for all the values of target variable. ## Variable importance
+```{r}
+ImpData <- as.data.frame(importance(rf))
+ImpData$Var.Names <- row.names(ImpData)
+```
+```{r}
+ggplot(ImpData, aes(x=Var.Names, y=`%IncMSE`)) +
+  geom_segment( aes(x=Var.Names, xend=Var.Names, y=0, yend=`%IncMSE`), color="skyblue") +
+  geom_point(aes(size = IncNodePurity), color="blue", alpha=0.6) +
+  theme_light() +
+  coord_flip() +
+  theme(
+    legend.position="bottom",
+    panel.grid.major.y = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+```
+
+xgboost
+```{r}
+library(xgboost)
+```
+```{r}
+train_x <- as.matrix(train %>% dplyr::select(-c(log_Vacancy)))
+test_x <- as.matrix(test %>% dplyr::select(-c(log_Vacancy)))
+train_y <- as.matrix(train$log_Vacancy)
+test_y <- as.matrix(test$log_Vacancy)
+xgb_train = xgb.DMatrix(data = train_x, label = train_y)
+xgb_test = xgb.DMatrix(data = test_x, label = test_y)
+xgb_model = xgb.train(data = xgb_train, max.depth = 3, nrounds = 100)
+```
+```{r}
+print(xgb_model)
+```
+
+  
+Predictions
+```{r}
+pred3 <- predict(xgb_model, test_x)
+rmse <- sqrt(sum(exp(pred3) - exp(test$log_Vacancy))^2)/length(test$log_Vacancy)
+c(RMSE = rmse,R2 = 1 - (sum((exp(test$log_Vacancy)-exp(pred3))^2)/sum((exp(test$log_Vacancy)-mean(exp(test$log_Vacancy)))^2)))
+```
+
+Xgboost outperformed, it’s R2 is 0.95 and RMSE 0.15 which is much better than random forest. 
+## Predictions analysis
+```{r}
+par(mfrow=c(1,1))
+plot(test$log_Vacancy, pred3)
+```
+
+The relation beteween prediction and target variable is approximately linear ## Residual analysis
+```{r}
+res <- pred3 - test$log_Vacancy
+plot(pred3,res)
+abline(0,0)
+```
+
+The model make approximately the same errors for all the values of target variable.
+```{r}
+importance <- xgb.importance(feature_names = colnames(train %>% dplyr::select(-c(log_Vacancy))), model = xgb_model)
+print(xgb.plot.importance(importance_matrix = importance))
+```
+
+
+
+Conclusion
+After the analysis and training models, we may conclude that the variables that affect the most the vacation are : Units,City,Days till available,Price,Floor,Renovated,sq.ft.
